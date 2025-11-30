@@ -3,53 +3,63 @@ from collector_bills import BillCollector
 from collector_news import NewsCollector
 from analyzer import StockAnalyzer
 
-def print_colored_report(result):
-    signal = result.get('investment_signal', 'Neutral')
-    phase = result.get('market_phase', 'Unknown')
-    
-    # 이모지 및 시그널 매핑
+def print_simple_card(data):
+    # 신호에 따른 이모지
+    signal = data.get('investment_signal', 'Neutral')
     icon = "⚪"
-    if "Buy" in signal:
-        icon = "🔥 [진입 추천]"
-    elif "Caution" in signal:
-        icon = "📉 [재료 소멸/주의]"
+    if "Buy" in signal: icon = "🔥 [매수 기회]"
+    elif "Caution" in signal: icon = "⚠️ [관망/주의]"
+
+    print(f"\n{'-'*30}")
+    print(f"{icon} {data.get('title')}")
+    print(f"{'-'*30}")
+    
+    # 1. 발행 정보 (일시 & URL)
+    print(f"📅 일시: {data.get('published', '날짜 정보 없음')}")
+    print(f"🔗 링크: {data.get('link', 'URL 없음')}")
+    print(f"📝 요약: {data.get('summary_1line', '요약 없음')}")
+    
+    print(f"\n💰 [추천 종목 및 전략]")
+    stocks = data.get('related_stocks', [])
+    
+    if not stocks:
+        print("   -> 뚜렷한 관련주 없음")
+    
+    for stock in stocks:
+        name = stock.get('name', '종목명')
+        strat = stock.get('strategy', {})
         
-    print(f"\n{icon} {result['title']}")
-    print(f"   📂 업종: {result.get('sector')} | 🗝️ 키워드: {result.get('detected_keyword')}")
-    print(f"   🔄 국면: {phase} ({'기대감 형성 중' if phase == 'Expectation' else '결과 확정/재료 노출'})")
-    print(f"   📊 관련주: {', '.join(result.get('related_stocks', []))}")
-    print(f"   💡 전략: {result.get('reasoning')}")
-    print("-" * 60)
+        print(f"   📌 {name}")
+        print(f"      🔵 매수: {strat.get('buy', '-')}")
+        print(f"      🔴 익절: {strat.get('target', '-')}")
+        print(f"      🛡️ 손절: {strat.get('stop_loss', '-')}")
+    
+    print("="*30 + "\n")
 
 def job():
-    print("🚀 [증시 알리미 봇] Event-Driven 전략 분석 시작...")
+    print("🚀 [증시 알리미] 뉴스 수집 및 매매 전략 분석 중...\n")
     
-    # 인스턴스
-    bill_collector = BillCollector()
+    # 1. 수집
+    # collector_news.py가 feedparser로 잘 동작한다고 가정
     news_collector = NewsCollector()
-    analyzer = StockAnalyzer()
+    news_data = news_collector.get_all_news()
     
-    # 데이터 수집 (샘플링)
-    # 실제 운용 시에는 collector 내부 로직을 통해 더 많은 데이터를 가져오세요.
-    raw_data = news_collector.get_all_news() + bill_collector.fetch_recent_bills()
-    
-    if not raw_data:
-        print("수집된 데이터가 없습니다.")
+    # 데이터가 너무 많으면 테스트용으로 5개만 자름
+    if len(news_data) > 5:
+        news_data = news_data[:5]
+
+    if not news_data:
+        print("📭 분석할 새로운 뉴스가 없습니다.")
         return
 
-    print(f"🧠 {len(raw_data)}건의 데이터에 대해 '기대감 vs 소멸' 여부를 판별 중입니다...")
-    analyzed_results = analyzer.analyze_content(raw_data)
+    # 2. 분석
+    analyzer = StockAnalyzer()
+    analyzed_results = analyzer.analyze_content(news_data)
     
-    print("\n" + "="*60)
-    print("📢 AI 투자 전략 리포트")
-    print("="*60)
-    
-    # 결과 출력
+    # 3. 리포팅
+    print(f"📊 총 {len(analyzed_results)}건의 분석 리포트")
     for res in analyzed_results:
-        # 기타 업종이거나 중요도가 너무 낮으면 스킵
-        if res.get('sector') == '기타' or res.get('importance_score', 0) < 4:
-            continue
-        print_colored_report(res)
+        print_simple_card(res)
 
 if __name__ == "__main__":
     job()
